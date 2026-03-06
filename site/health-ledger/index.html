@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Health Review · Live</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/fill/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/regular/style.css">
+<style>
+  /* ---- DARK MODE (default) ---- */
+  :root {
+    --bg: #111111; --s1: #1a1a1c; --s2: #252528; --s3: #303033;
+    --lbl: rgba(255,255,255,0.5); --sec: rgba(255,255,255,0.7); --pri: #fff;
+    --red: #ff453a; --ora: #ff9f0a; --yel: #ffd60a; --grn: #30d158;
+    --blu: #0a84ff; --ind: #5e5ce6; --pur: #bf5af2; --pnk: #ff375f;
+    --cya: #64d2ff; --mnt: #00c7be; --mov: #fa114f; --exr: #a2f828;
+    --divider: rgba(255,255,255,0.06);
+    --grade-text: #fff;
+    --tooltip-bg: rgba(26,26,28,0.95);
+    --grid-line: rgba(255,255,255,0.05);
+    --tick-color: rgba(255,255,255,0.3);
+  }
+
+  /* ---- LIGHT MODE ---- */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f2f2f7; --s1: #ffffff; --s2: #e5e5ea; --s3: #d1d1d6;
+      --lbl: rgba(0,0,0,0.4); --sec: rgba(0,0,0,0.55); --pri: #000;
+      --red: #ff3b30; --ora: #ff9500; --yel: #ff9f0a; --grn: #34c759;
+      --blu: #007aff; --ind: #5856d6; --pur: #af52de; --pnk: #ff2d55;
+      --cya: #32ade6; --mnt: #00c7be; --mov: #e8103e; --exr: #6abf1e;
+      --divider: rgba(0,0,0,0.08);
+      --grade-text: #fff;
+      --tooltip-bg: rgba(255,255,255,0.95);
+      --grid-line: rgba(0,0,0,0.06);
+      --tick-color: rgba(0,0,0,0.35);
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'SF Pro Display', system-ui, sans-serif;
+    background: var(--bg); color: var(--pri);
+    -webkit-font-smoothing: antialiased;
+    height: 100vh; overflow: hidden;
+  }
+
+  .page {
+    height: 100vh; display: flex; flex-direction: column; padding: 14px 16px 10px;
+  }
+
+  /* ---- HEADER ---- */
+  .hdr {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 10px; flex-shrink: 0;
+  }
+  .hdr h1 { font-size: 33px; font-weight: 700; }
+  .hdr .sub { font-size: 18px; color: var(--lbl); }
+
+  /* ---- BODY: sidebar + grid ---- */
+  .body { display: flex; gap: 10px; flex: 1; min-height: 0; }
+
+  /* ---- LEFT SIDEBAR ---- */
+  .sidebar {
+    width: 300px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .grade-card {
+    background: var(--s1); border-radius: 14px; padding: 14px;
+    display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  }
+  .grade-badge {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--blu), var(--pur));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 33px; font-weight: 800; flex-shrink: 0;
+  }
+  .grade-info h2 { font-size: 22px; font-weight: 600; }
+  .grade-info p { font-size: 16px; color: var(--sec); line-height: 1.4; margin-top: 2px; }
+
+  .insight {
+    background: var(--s1); border-radius: 12px; padding: 12px 14px;
+    border-left: 3px solid var(--blu);
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .insight b { font-size: 19px; display: block; margin-bottom: 3px; color: var(--pri); }
+  .insight p { font-size: 17px; color: var(--sec); line-height: 1.45; }
+  .insight.warn { border-color: var(--yel); }
+  .insight.good { border-color: var(--grn); }
+  .insight.alert { border-color: var(--red); }
+  .insight.loading { opacity: 0.6; }
+
+  /* ---- MAIN TILE GRID ---- */
+  .grid {
+    flex: 1; min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: auto 1fr auto 1fr;
+    gap: 8px;
+  }
+  .tile {
+    background: var(--s1); border-radius: 14px; padding: 10px 12px;
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+  .tile .t-top {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
+    flex-shrink: 0; margin-bottom: 1px; gap: 0 8px;
+  }
+  .tile h3 { font-size: 19px; font-weight: 600; }
+  .tile .t-val { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+  .tile .t-unit { font-size: 16px; font-weight: 400; color: var(--sec); }
+  .tile .t-delta { font-size: 15px; font-weight: 600; margin-left: 4px; }
+  .tile .t-sub { font-size: 15px; color: var(--lbl); flex-shrink: 0; margin-bottom: 3px; line-height: 1.3; }
+  .tile .t-chart { flex: 1; position: relative; min-height: 0; }
+  .tile.loading { opacity: 0.5; pointer-events: none; }
+  .tile .t-error { color: var(--red); font-size: 13px; padding: 6px 0; }
+  .error-banner { background: var(--card); border: 1px solid var(--red); border-radius: 12px; padding: 20px 24px; margin: 16px auto; max-width: 480px; text-align: center; }
+  .error-banner p { color: var(--sec); font-size: 14px; margin: 6px 0 14px; }
+  .error-banner h3 { color: var(--red); font-size: 16px; margin: 0; }
+  .retry-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .retry-btn:hover { opacity: 0.85; }
+
+  /* Rating badge inside trend tiles */
+  .rating {
+    display: inline-block; font-size: 13px; font-weight: 700;
+    padding: 1px 6px; border-radius: 4px; margin-left: 5px;
+    vertical-align: middle; letter-spacing: 0.2px;
+  }
+
+  /* ---- SLEEP TILE (horizontal bars) ---- */
+  .sleep-body {
+    flex: 1; display: flex; flex-direction: column; min-height: 0;
+  }
+  .sl-legend { display: flex; gap: 8px; margin-bottom: 4px; flex-shrink: 0; }
+  .sl-legend span { font-size: 15px; color: var(--sec); display: flex; align-items: center; gap: 3px; }
+  .sl-legend i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .sleep-rows { flex: 1; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
+  .sl-row { display: flex; align-items: center; gap: 6px; }
+  .sl-row .sl-lbl { font-size: 15px; color: var(--lbl); width: 28px; text-align: right; flex-shrink: 0; }
+  .sl-bar-wrap {
+    flex: 1; height: 14px; border-radius: 4px; overflow: hidden;
+    display: flex; background: var(--s2);
+  }
+  .sl-bar-wrap .sc { background: var(--blu); }
+  .sl-bar-wrap .sd { background: var(--ind); }
+  .sl-bar-wrap .sr { background: var(--cya); }
+  .sl-row .sl-t { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; width: 26px; flex-shrink: 0; }
+
+  /* ---- SECTION HEADINGS in grid ---- */
+  .sec-heading {
+    grid-column: 1 / -1;
+    font-size: 16px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.6px; color: var(--lbl);
+    padding: 2px 0 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sec-heading::after {
+    content: ''; flex: 1; height: 1px;
+    background: var(--divider);
+  }
+
+  /* ---- ICONS (Phosphor) ---- */
+  .tile h3 { display: flex; align-items: center; gap: 5px; }
+  .tile h3 i { font-size: 24px; }
+
+  .foot { text-align: center; font-size: 15px; color: var(--lbl); padding-top: 6px; flex-shrink: 0; }
+  .foot button {
+    background: var(--blu); color: #fff; border: none;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    font-size: 14px; font-weight: 600; margin: 0 4px;
+  }
+  .foot button:hover { opacity: 0.8; }
+
+  /* ---- LOGIN OVERLAY ---- */
+  .login-overlay {
+    position: fixed; inset: 0; background: var(--bg); z-index: 1000;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+  }
+  .login-overlay h1 { font-size: 44px; font-weight: 700; }
+  .login-overlay p { font-size: 18px; color: var(--sec); text-align: center; max-width: 360px; line-height: 1.5; }
+  .login-overlay .login-btn {
+    background: #24292e; color: #fff; border: none; padding: 12px 28px;
+    border-radius: 10px; cursor: pointer; font-size: 16px; font-weight: 600;
+    display: flex; align-items: center; gap: 10px; transition: background 0.2s;
+  }
+  .login-overlay .login-btn:hover { background: #3a3f44; }
+  .login-overlay .login-error { color: var(--red); font-size: 14px; max-width: 360px; text-align: center; }
+  @media (prefers-color-scheme: light) {
+    .login-overlay .login-btn { background: #24292e; }
+    .login-overlay .login-btn:hover { background: #3a3f44; }
+  }
+
+  /* ---- RESPONSIVE: tablet ---- */
+  @media (max-width: 1024px) {
+    body { height: auto; overflow: auto; }
+    .page { height: auto; min-height: 100vh; }
+    .body { flex-direction: column; }
+    .sidebar {
+      width: 100%; flex-direction: row; flex-wrap: wrap; gap: 8px;
+    }
+    .grade-card { flex: 1 1 100%; }
+    .insight { flex: 1 1 calc(50% - 4px); min-height: auto; }
+    .grid {
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: auto repeat(2, minmax(200px, 1fr)) auto repeat(2, minmax(200px, 1fr));
+    }
+  }
+
+  /* ---- RESPONSIVE: mobile ---- */
+  @media (max-width: 640px) {
+    .page { padding: 12px; }
+    .hdr { flex-direction: column; gap: 4px; margin-bottom: 12px; }
+    .hdr h1 { font-size: 28px; }
+    .hdr .sub { font-size: 14px; }
+    .sidebar { flex-direction: column; }
+    .insight { flex: 1 1 100%; }
+    .grade-info h2 { font-size: 18px; }
+    .grade-info p { font-size: 14px; }
+    .insight b { font-size: 16px; }
+    .insight p { font-size: 14px; }
+    .grid {
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: auto repeat(3, minmax(180px, 1fr)) auto repeat(3, minmax(180px, 1fr));
+    }
+    .tile h3 { font-size: 16px; }
+    .tile .t-val { font-size: 24px; }
+    .tile .t-unit { font-size: 14px; }
+    .tile .t-delta { font-size: 13px; }
+    .tile .t-sub { font-size: 13px; }
+    .tile h3 i { font-size: 20px; }
+    .sec-heading { font-size: 14px; }
+    .sl-legend span { font-size: 13px; }
+    .sl-row .sl-lbl { font-size: 13px; }
+    .sl-row .sl-t { font-size: 13px; }
+    .rating { font-size: 11px; }
+    .foot { font-size: 13px; }
+  }
+
+  /* ---- RESPONSIVE: small phone ---- */
+  @media (max-width: 400px) {
+    .grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto repeat(5, minmax(180px, 1fr)) auto repeat(5, minmax(180px, 1fr));
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login overlay (shown when not authenticated) -->
+<div class="login-overlay" id="loginOverlay">
+  <h1>Health</h1>
+  <p>Sign in with GitHub to view your health dashboard</p>
+  <button class="login-btn" onclick="startAuth()">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    Sign in with GitHub
+  </button>
+  <div class="login-error" id="loginError" style="display:none"></div>
+</div>
+
+<div class="page">
+
+<!-- HEADER -->
+<div class="hdr">
+  <h1>Health</h1>
+  <div class="sub" id="dateRange">Loading...</div>
+</div>
+
+<div class="body">
+
+<!-- LEFT SIDEBAR: Grade + Insights -->
+<div class="sidebar">
+  <div class="grade-card">
+    <div class="grade-badge" id="gradeBadge">—</div>
+    <div class="grade-info">
+      <h2 id="gradeTitle">Overall Fitness</h2>
+      <p id="gradeDesc">Loading...</p>
+    </div>
+  </div>
+
+  <!-- Insight cards disabled — will be replaced with LLM analysis -->
+
+</div>
+
+<!-- MAIN: 5×2 uniform tile grid -->
+<div class="grid">
+
+  <!-- SECTION: This Week -->
+  <div class="sec-heading">This Week</div>
+
+  <!-- Steps -->
+  <div class="tile loading" id="stepsT">
+    <div class="t-top">
+      <h3 style="color:var(--blu)"><i class="ph-fill ph-person-simple-walk"></i>Steps</h3>
+      <div><span class="t-val" style="color:var(--blu)" id="stepsVal">—</span><span class="t-delta" id="stepsDelta" style="color:var(--red)">—</span></div>
+    </div>
+    <div class="t-sub">avg/day · dashed = 90-day avg</div>
+    <div class="t-chart"><canvas id="stepsChart"></canvas></div>
+  </div>
+
+  <!-- Heart -->
+  <div class="tile loading" id="heartT">
+    <div class="t-top">
+      <h3 style="color:var(--red)"><i class="ph-fill ph-heart"></i>Heart</h3>
+      <div><span class="t-val" style="color:var(--red)" id="rhrVal">—</span><span class="t-unit"> bpm</span></div>
+    </div>
+    <div class="t-sub"><span style="color:var(--red)">●</span> RHR &nbsp;<span style="color:var(--pur)">●</span> HRV <span id="hrvVal">(— ms)</span> &nbsp;<span style="color:var(--lbl)">┈</span> baseline</div>
+    <div class="t-chart"><canvas id="hrChart"></canvas></div>
+  </div>
+
+  <!-- Energy -->
+  <div class="tile loading" id="energyT">
+    <div class="t-top">
+      <h3 style="color:var(--mov)"><i class="ph-fill ph-flame"></i>Energy</h3>
+      <div><span class="t-val" style="color:var(--mov)" id="energyVal">—</span><span class="t-unit"> kJ</span><span class="t-delta" id="energyDelta" style="color:var(--red)">—</span></div>
+    </div>
+    <div class="t-sub"><span style="color:var(--mov)">■</span> Active kJ &nbsp;<span style="color:var(--exr)">●</span> Exercise min</div>
+    <div class="t-chart"><canvas id="energyChart"></canvas></div>
+  </div>
+
+  <!-- Body -->
+  <div class="tile loading" id="bodyT">
+    <div class="t-top">
+      <h3 style="color:var(--ora)"><i class="ph-fill ph-barbell"></i>Body</h3>
+      <div><span class="t-val" style="color:var(--ora)" id="weightVal">—</span><span class="t-unit"> kg</span><span class="t-delta" id="weightDelta" style="color:var(--grn)">—</span></div>
+    </div>
+    <div class="t-sub"><span style="color:var(--ora)">●</span> Weight &nbsp;<span style="color:var(--pnk)">●</span> Body fat <span id="bfVal">—</span></div>
+    <div class="t-chart"><canvas id="bodyChart"></canvas></div>
+  </div>
+
+  <!-- Sleep -->
+  <div class="tile loading" id="sleepT">
+    <div class="t-top">
+      <h3 style="color:var(--cya)"><i class="ph-fill ph-moon-stars"></i>Sleep</h3>
+      <div><span class="t-val" style="color:var(--cya)" id="sleepAvg">—</span><span class="t-unit"> avg</span></div>
+    </div>
+    <div class="sleep-body">
+      <div class="sl-legend">
+        <span><i style="background:var(--blu)"></i>Core</span>
+        <span><i style="background:var(--ind)"></i>Deep</span>
+        <span><i style="background:var(--cya)"></i>REM</span>
+      </div>
+      <div class="sleep-rows" id="sleepRows">
+        <div style="text-align:center;color:var(--lbl)">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION: Long Term -->
+  <div class="sec-heading">Long Term</div>
+
+  <!-- VO2max -->
+  <div class="tile loading" id="vo2T">
+    <div class="t-top">
+      <h3 style="color:var(--blu)"><i class="ph-fill ph-wind"></i>VO2max</h3>
+      <div><span class="t-val" style="color:var(--blu)" id="vo2Val">—</span><span class="rating" id="vo2Rating" style="background:rgba(48,209,88,0.15);color:var(--grn)">—</span></div>
+    </div>
+    <div class="t-sub">3-year · ml/kg/min · green = excellent (42+)</div>
+    <div class="t-chart"><canvas id="vo2Chart"></canvas></div>
+  </div>
+
+  <!-- RHR Long-term -->
+  <div class="tile loading" id="rhrT">
+    <div class="t-top">
+      <h3 style="color:var(--red)"><i class="ph-fill ph-heartbeat"></i>Resting HR</h3>
+      <div><span class="t-val" style="color:var(--red)" id="rhr3yVal">—</span><span class="rating" id="rhrRating" style="background:rgba(48,209,88,0.15);color:var(--grn)">—</span></div>
+    </div>
+    <div class="t-sub">3-year · bpm · dashed = 60 bpm threshold</div>
+    <div class="t-chart"><canvas id="rhrChart"></canvas></div>
+  </div>
+
+  <!-- HRV Long-term -->
+  <div class="tile loading" id="hrvT">
+    <div class="t-top">
+      <h3 style="color:var(--pur)"><i class="ph ph-wave-sine"></i>HRV</h3>
+      <div><span class="t-val" style="color:var(--pur)" id="hrv3yVal">—</span><span class="rating" id="hrvRating" style="background:rgba(255,214,10,0.15);color:var(--yel)">—</span></div>
+    </div>
+    <div class="t-sub">3-year · ms SDNN · dashed = trendline</div>
+    <div class="t-chart"><canvas id="hrvChart"></canvas></div>
+  </div>
+
+  <!-- Weight Long-term -->
+  <div class="tile loading" id="wtT">
+    <div class="t-top">
+      <h3 style="color:var(--ora)"><i class="ph-fill ph-scales"></i>Weight</h3>
+      <div><span class="t-val" style="color:var(--ora)" id="wt3yVal">—</span><span class="rating" id="wtRating" style="background:rgba(48,209,88,0.15);color:var(--grn)">—</span></div>
+    </div>
+    <div class="t-sub">3-year · kg · BF <span id="bf3yVal">—</span>% <span id="bfRating">(—)</span></div>
+    <div class="t-chart"><canvas id="wtChart"></canvas></div>
+  </div>
+
+  <!-- Mobility -->
+  <div class="tile loading" id="mobT">
+    <div class="t-top">
+      <h3 style="color:var(--mnt)"><i class="ph-fill ph-person-simple-run"></i>Mobility</h3>
+      <div><span class="t-val" style="color:var(--mnt)" id="mobVal">—</span><span class="rating" id="mobRating" style="background:rgba(48,209,88,0.15);color:var(--grn)">—</span></div>
+    </div>
+    <div class="t-sub" id="mobSub">quarterly · km/h walk speed</div>
+    <div class="t-chart"><canvas id="mobChart"></canvas></div>
+  </div>
+
+</div><!-- /grid -->
+</div><!-- /body -->
+
+<div class="foot">
+  Apple Health &amp; Withings · <span id="updated">Loading...</span>
+  <button onclick="refreshData()">↻ Refresh</button>
+  <button onclick="logout()" style="background:var(--s2); color:var(--sec);">Sign out</button>
+</div>
+</div><!-- /page -->
+
+<script>
+const MCP_URL = 'https://mcp-gateway.matthewdart.name/mcp';
+const GATEWAY_BASE = MCP_URL.replace(/\/mcp$/, '');
+const AUTH_KEY = 'mcp_auth';
+const CLIENT_KEY = 'mcp_client';
+let mcpId = 0;
+let mcpSessionId = null;
+let mcpInitialized = false;
+let chartInstances = {};
+
+// ===== AUTH: OAuth 2.0 + PKCE =====
+function base64url(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function generatePKCE() {
+  const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = base64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  return { verifier, challenge };
+}
+
+async function registerClient() {
+  const cached = localStorage.getItem(CLIENT_KEY);
+  if (cached) try { return JSON.parse(cached); } catch { localStorage.removeItem(CLIENT_KEY); }
+  const res = await fetch(GATEWAY_BASE + '/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_name: 'Health Dashboard',
+      redirect_uris: [location.origin + location.pathname],
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'client_secret_post'
+    })
+  });
+  if (!res.ok) throw new Error('Client registration failed: ' + res.status);
+  const data = await res.json();
+  localStorage.setItem(CLIENT_KEY, JSON.stringify(data));
+  return data;
+}
+
+async function startAuth() {
+  try {
+    const client = await registerClient();
+    const { verifier, challenge } = await generatePKCE();
+    sessionStorage.setItem('pkce_verifier', verifier);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: client.client_id,
+      redirect_uri: location.origin + location.pathname,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      scope: 'user'
+    });
+    location.href = GATEWAY_BASE + '/authorize?' + params;
+  } catch (e) {
+    const el = document.getElementById('loginError');
+    el.textContent = e.message;
+    el.style.display = 'block';
+  }
+}
+
+async function exchangeCode(code) {
+  const client = JSON.parse(localStorage.getItem(CLIENT_KEY));
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  if (!client || !verifier) throw new Error('Missing client registration or PKCE verifier');
+  const res = await fetch(GATEWAY_BASE + '/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: location.origin + location.pathname,
+      client_id: client.client_id,
+      client_secret: client.client_secret,
+      code_verifier: verifier
+    })
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('Token exchange failed: ' + text);
+  }
+  const data = await res.json();
+  const auth = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at: Date.now() + (data.expires_in || 3600) * 1000
+  };
+  localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+  sessionStorage.removeItem('pkce_verifier');
+  return auth;
+}
+
+function getAuth() {
+  const stored = localStorage.getItem(AUTH_KEY);
+  if (!stored) return null;
+  try {
+    const auth = JSON.parse(stored);
+    if (!auth.access_token || auth.expires_at < Date.now() + 60000) return null;
+    return auth;
+  } catch { localStorage.removeItem(AUTH_KEY); return null; }
+}
+
+function showLogin(error) {
+  document.getElementById('loginOverlay').style.display = 'flex';
+  if (error) {
+    const el = document.getElementById('loginError');
+    el.textContent = error;
+    el.style.display = 'block';
+  }
+}
+
+function hideLogin() {
+  document.getElementById('loginOverlay').style.display = 'none';
+}
+
+function logout() {
+  localStorage.removeItem(AUTH_KEY);
+  localStorage.removeItem(CLIENT_KEY);
+  mcpSessionId = null;
+  mcpInitialized = false;
+  showLogin();
+}
+
+// ===== MCP CLIENT =====
+async function mcpRpc(method, params = {}) {
+  const auth = getAuth();
+  if (!auth) { showLogin(); throw new Error('Not authenticated'); }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/event-stream',
+    'Authorization': 'Bearer ' + auth.access_token
+  };
+  if (mcpSessionId) headers['Mcp-Session-Id'] = mcpSessionId;
+
+  const res = await fetch(MCP_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ jsonrpc: '2.0', method, params, id: ++mcpId })
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem(AUTH_KEY);
+    showLogin('Session expired — please sign in again');
+    throw new Error('Authentication expired');
+  }
+
+  const sid = res.headers.get('Mcp-Session-Id');
+  if (sid) mcpSessionId = sid;
+
+  const ct = res.headers.get('Content-Type') || '';
+
+  if (ct.includes('text/event-stream')) {
+    const text = await res.text();
+    const lines = text.split('\n');
+    let lastData = null;
+    for (const line of lines) {
+      if (line.startsWith('data: ')) lastData = line.slice(6);
+    }
+    if (!lastData) throw new Error('Empty SSE response');
+    try { return JSON.parse(lastData); }
+    catch { throw new Error('Invalid SSE JSON: ' + lastData.slice(0, 100)); }
+  }
+
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error('Invalid response (HTTP ' + res.status + '): ' + text.slice(0, 100)); }
+}
+
+let mcpInitPromise = null;
+
+async function mcpInit() {
+  if (mcpInitialized) return;
+  if (!mcpInitPromise) {
+    mcpInitPromise = (async () => {
+      try {
+        await mcpRpc('initialize', {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'health-dashboard', version: '1.0' }
+        });
+        const auth = getAuth();
+        const headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+          'Authorization': 'Bearer ' + auth.access_token
+        };
+        if (mcpSessionId) headers['Mcp-Session-Id'] = mcpSessionId;
+        await fetch(MCP_URL, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
+        });
+        mcpInitialized = true;
+      } catch (e) {
+        mcpInitPromise = null;  // allow retry on failure
+        throw e;
+      }
+    })();
+  }
+  return mcpInitPromise;
+}
+
+async function mcpQuery(sql, attempt = 0) {
+  await mcpInit();
+  const json = await mcpRpc('tools/call', { name: 'health_query', arguments: { sql } });
+  if (json.error) throw new Error(json.error.message);
+  const result = json.result;
+  if (result.isError) {
+    const msg = result.content?.[0]?.text || 'Tool error';
+    // Retry once on transient "tool not found" — upstream may be reconnecting
+    if (attempt === 0 && msg.includes('not found')) {
+      await new Promise(r => setTimeout(r, 2000));
+      return mcpQuery(sql, 1);
+    }
+    throw new Error(msg);
+  }
+  const content = result.content[0].text;
+  try { return JSON.parse(content); }
+  catch { throw new Error(content.slice(0, 200)); }
+}
+
+// ===== CHART SETUP =====
+Chart.defaults.font.family = "-apple-system, 'SF Pro Text', system-ui, sans-serif";
+Chart.defaults.font.size = 10;
+const isLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+const G = { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)' };
+const T = { color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.3)', font: { size: 13 } };
+const B = {
+  responsive: true, maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: { legend: { display: false },
+    tooltip: {
+      backgroundColor: isLight ? 'rgba(255,255,255,0.95)' : 'rgba(26,26,28,0.95)',
+      titleColor: isLight ? '#000' : '#fff',
+      bodyColor: isLight ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)',
+      titleFont: { size: 11, weight: '600' }, bodyFont: { size: 10 }, cornerRadius: 8, padding: 8,
+      borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)', borderWidth: 1
+    }
+  }
+};
+const xOff = { ticks: T, grid: { display: false } };
+const fill = (r,g,b) => `rgba(${r},${g},${b},${isLight ? 0.12 : 0.06})`;
+const base = (r,g,b) => `rgba(${r},${g},${b},${isLight ? 0.25 : 0.18})`;
+const sparkFill = (r,g,b) => `rgba(${r},${g},${b},${isLight ? 0.15 : 0.08})`;
+const spark = (min, max) => ({
+  ...B,
+  scales: { x: { display: false }, y: { display: false, min, max } },
+  elements: { point: { radius: 0, hoverRadius: 3 } }
+});
+
+// ===== UTILITY FUNCTIONS =====
+function getDayLabel(dateStr) {
+  const d = new Date(dateStr);
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+}
+
+function getMonthLabel(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function ratingBg(type) {
+  const ratings = {
+    'Excellent': 'rgba(48,209,88,0.15)',
+    'Good': 'rgba(48,209,88,0.15)',
+    'Great': 'rgba(48,209,88,0.15)',
+    'Athletic': 'rgba(48,209,88,0.15)',
+    'Fair': 'rgba(255,159,10,0.15)',
+    'Average': 'rgba(255,159,10,0.15)',
+    'Watch': 'rgba(255,214,10,0.15)',
+    'Declining': 'rgba(255,159,10,0.15)',
+    'Healthy': 'rgba(48,209,88,0.15)',
+    'Low': 'rgba(255,69,58,0.15)',
+    'Elite': 'rgba(48,209,88,0.15)',
+  };
+  return ratings[type] || 'rgba(48,209,88,0.15)';
+}
+
+function ratingColor(type) {
+  const colors = {
+    'Excellent': 'var(--grn)',
+    'Good': 'var(--grn)',
+    'Great': 'var(--grn)',
+    'Athletic': 'var(--grn)',
+    'Fair': 'var(--ora)',
+    'Average': 'var(--ora)',
+    'Watch': 'var(--yel)',
+    'Declining': 'var(--yel)',
+    'Healthy': 'var(--grn)',
+    'Low': 'var(--red)',
+    'Elite': 'var(--grn)',
+  };
+  return colors[type] || 'var(--grn)';
+}
+
+// ===== DATA LOADING & INSIGHTS =====
+async function loadData() {
+  try {
+    // Establish MCP session before firing parallel queries
+    await mcpInit();
+
+    // Get baseline date range: last 8 days
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() - 1); // yesterday
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 7); // 8 days back
+
+    const dateStr = (d) => d.toISOString().split('T')[0];
+    const startDateStr = dateStr(startDate);
+    const endDateStr = dateStr(endDate);
+
+    const year = endDate.getFullYear();
+    document.getElementById('dateRange').textContent = `${getMonthLabel(startDateStr)} – ${getMonthLabel(endDateStr)}, ${year}`;
+    document.getElementById('updated').textContent = `Updated ${getMonthLabel(endDateStr)}, ${year}`;
+
+    // Parallel queries — allSettled so one failure doesn't crash all tiles
+    const results = await Promise.allSettled([
+      mcpQuery(`SELECT CAST(start_date AS DATE) as day, ROUND(SUM(CAST(value AS DOUBLE)), 0) as steps FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierStepCount' AND source_name LIKE '%Watch%' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 10 DAY GROUP BY day ORDER BY day DESC LIMIT 8`),
+      mcpQuery(`SELECT CAST(start_date AS DATE) as day, ROUND(AVG(CAST(value AS DOUBLE)), 1) as rhr FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierRestingHeartRate' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 10 DAY GROUP BY day ORDER BY day DESC LIMIT 8`),
+      mcpQuery(`SELECT CAST(start_date AS DATE) as day, ROUND(AVG(CAST(value AS DOUBLE)), 1) as hrv FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 10 DAY GROUP BY day ORDER BY day DESC LIMIT 8`),
+      mcpQuery(`SELECT CAST(start_date AS DATE) as day, ROUND(SUM(CAST(value AS DOUBLE)), 0) as kj FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierActiveEnergyBurned' AND source_name LIKE '%Watch%' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 10 DAY GROUP BY day ORDER BY day DESC LIMIT 8`),
+      mcpQuery(`SELECT CAST(start_date AS DATE) as day, ROUND(SUM(CAST(value AS DOUBLE)), 0) as min FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierAppleExerciseTime' AND source_name LIKE '%Watch%' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 10 DAY GROUP BY day ORDER BY day DESC LIMIT 8`),
+      mcpQuery(`SELECT CAST(start_date AS DATE) as day, ROUND(AVG(CAST(value AS DOUBLE)), 1) as weight FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierBodyMass' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 10 DAY GROUP BY day ORDER BY day DESC LIMIT 8`),
+      mcpQuery(`SELECT CAST(start_date AS DATE) as day, ROUND(AVG(CAST(value AS DOUBLE)), 1) as weight FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierBodyMass' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 90 DAY GROUP BY day ORDER BY day`),
+      mcpQuery(`SELECT CAST(start_date AS DATE) as day, ROUND(AVG(CAST(value AS DOUBLE) * 100), 1) as bf FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierBodyFatPercentage' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 10 DAY GROUP BY day ORDER BY day DESC LIMIT 8`),
+      mcpQuery(`SELECT end_date as day, ROUND(SUM(CASE WHEN value LIKE '%Core%' THEN duration_sec / 60.0 ELSE 0 END), 0) as core_min, ROUND(SUM(CASE WHEN value LIKE '%Deep%' THEN duration_sec / 60.0 ELSE 0 END), 0) as deep_min, ROUND(SUM(CASE WHEN value LIKE '%REM%' THEN duration_sec / 60.0 ELSE 0 END), 0) as rem_min FROM gold_records_enriched WHERE type = 'HKCategoryTypeIdentifierSleepAnalysis' AND value LIKE '%Asleep%' AND end_date >= CURRENT_DATE - INTERVAL 10 DAY GROUP BY day ORDER BY day DESC LIMIT 7`),
+      mcpQuery(`SELECT DATE_TRUNC('month', CAST(start_date AS DATE)) as month, ROUND(AVG(CAST(value AS DOUBLE)), 1) as vo2max FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierVO2Max' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 3 YEAR GROUP BY month ORDER BY month`),
+      mcpQuery(`SELECT DATE_TRUNC('month', CAST(start_date AS DATE)) as month, ROUND(AVG(CAST(value AS DOUBLE)), 1) as rhr FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierRestingHeartRate' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 3 YEAR GROUP BY month ORDER BY month`),
+      mcpQuery(`SELECT DATE_TRUNC('month', CAST(start_date AS DATE)) as month, ROUND(AVG(CAST(value AS DOUBLE)), 1) as hrv FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 3 YEAR GROUP BY month ORDER BY month`),
+      mcpQuery(`SELECT DATE_TRUNC('month', CAST(start_date AS DATE)) as month, ROUND(AVG(CAST(value AS DOUBLE)), 1) as weight FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierBodyMass' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 3 YEAR GROUP BY month ORDER BY month`),
+      mcpQuery(`SELECT DATE_TRUNC('month', CAST(start_date AS DATE)) as month, ROUND(AVG(CAST(value AS DOUBLE) * 100), 1) as bf FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierBodyFatPercentage' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 3 YEAR GROUP BY month ORDER BY month`),
+      mcpQuery(`SELECT DATE_TRUNC('quarter', CAST(start_date AS DATE)) as qtr, ROUND(AVG(CAST(value AS DOUBLE)), 2) as kmh FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierWalkingSpeed' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 3 YEAR GROUP BY qtr ORDER BY qtr`),
+      mcpQuery(`SELECT ROUND(AVG(CAST(value AS DOUBLE) * 100), 0) as pct FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierAppleWalkingSteadiness' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 90 DAY`),
+      mcpQuery(`SELECT ROUND(AVG(daily_steps), 0) as avg_steps FROM (SELECT CAST(start_date AS DATE) as day, SUM(CAST(value AS DOUBLE)) as daily_steps FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierStepCount' AND source_name LIKE '%Watch%' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 90 DAY AND CAST(start_date AS DATE) < CURRENT_DATE - INTERVAL 7 DAY GROUP BY day)`),
+      mcpQuery(`SELECT ROUND(AVG(daily_kj), 0) as avg_kj FROM (SELECT CAST(start_date AS DATE) as day, SUM(CAST(value AS DOUBLE)) as daily_kj FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierActiveEnergyBurned' AND source_name LIKE '%Watch%' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 90 DAY AND CAST(start_date AS DATE) < CURRENT_DATE - INTERVAL 7 DAY GROUP BY day)`),
+      mcpQuery(`SELECT ROUND(AVG(CAST(value AS DOUBLE)), 1) as avg_rhr FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierRestingHeartRate' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 90 DAY AND CAST(start_date AS DATE) < CURRENT_DATE - INTERVAL 7 DAY`),
+      mcpQuery(`SELECT ROUND(AVG(CAST(value AS DOUBLE)), 1) as avg_hrv FROM bronze.records WHERE type = 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN' AND CAST(start_date AS DATE) >= CURRENT_DATE - INTERVAL 90 DAY AND CAST(start_date AS DATE) < CURRENT_DATE - INTERVAL 7 DAY`)
+    ]);
+
+    const unwrap = r => r.status === 'fulfilled' ? r.value : null;
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length) console.warn(`${failed.length} queries failed:`, failed.map(r => r.reason?.message));
+    if (failed.length === results.length) throw new Error(failed[0].reason?.message || 'All queries failed — health service may be unavailable');
+
+    const [stepsData, rhrData, hrvData, energyData, activeEData, bodyData, wtData, bfData,
+            sleepData, vo2Data, rhr3yData, hrv3yData, wt3yData, bf3yData, mobData, steadinessData,
+            stepsBaselineData, energyBaselineData, rhrBaselineData, hrvBaselineData] = results.map(unwrap);
+
+    // Extract baseline values
+    const stepsBaseline = stepsBaselineData?.rows?.[0]?.[0] || 5000;
+    const energyBaseline = energyBaselineData?.rows?.[0]?.[0] || 1500;
+    const rhrBaseline = rhrBaselineData?.rows?.[0]?.[0] || 60;
+    const hrvBaseline = hrvBaselineData?.rows?.[0]?.[0] || 40;
+
+    // Fallback for failed queries — empty result set
+    const empty = { rows: [], columns: [], row_count: 0 };
+    const s = d => d || empty;
+
+    // Process all data — use slice() to avoid mutating original arrays
+    await renderWeekly(s(stepsData), s(rhrData), s(hrvData), s(energyData), s(activeEData), s(bodyData), s(bfData), s(sleepData), stepsBaseline, energyBaseline, rhrBaseline, hrvBaseline);
+    await renderLongTerm(s(vo2Data), s(rhr3yData), s(hrv3yData), s(wt3yData), s(bf3yData), s(wtData), s(mobData), s(steadinessData));
+    // Grade card (VO2max, RHR, HRV)
+    renderGrade(s(vo2Data), s(rhrData), s(hrvData));
+
+  } catch (e) {
+    console.error('Data load error:', e);
+    // Remove loading state
+    document.querySelectorAll('.tile').forEach(t => t.classList.remove('loading'));
+    // Show error banner with retry
+    const existing = document.getElementById('errorBanner');
+    if (existing) existing.remove();
+    const banner = document.createElement('div');
+    banner.id = 'errorBanner';
+    banner.className = 'error-banner';
+    banner.innerHTML = `<h3>Failed to load data</h3><p>${e.message}</p><button class="retry-btn" onclick="refreshData()">Retry</button>`;
+    document.querySelector('.grid').parentNode.insertBefore(banner, document.querySelector('.grid'));
+  }
+}
+
+async function renderWeekly(steps, rhr, hrv, energy, exercise, body, bf, sleep, stepsBaseline, energyBaseline, rhrBaseline, hrvBaseline) {
+  // Steps chart — slice to avoid mutating original, then reverse for ASC order
+  const stepsD = steps.rows.slice().reverse();
+  const stepsLabels = stepsD.map(r => getDayLabel(r[0]));
+  const stepsVals = stepsD.map(r => r[1]);
+  const stepsAvg = stepsVals.length ? Math.round(stepsVals.reduce((a,b) => a+b) / stepsVals.length) : 0;
+
+  document.getElementById('stepsVal').textContent = stepsAvg.toLocaleString();
+  const stepsDeltaPct = Math.round((stepsAvg / stepsBaseline - 1) * 100);
+  const stepsDeltaColor = stepsDeltaPct >= 0 ? 'var(--grn)' : 'var(--red)';
+  document.getElementById('stepsDelta').textContent = (stepsDeltaPct >= 0 ? '↑' : '↓') + Math.abs(stepsDeltaPct) + '%';
+  document.getElementById('stepsDelta').style.color = stepsDeltaColor;
+
+  if (chartInstances['stepsChart']) chartInstances['stepsChart'].destroy();
+  chartInstances['stepsChart'] = new Chart(document.getElementById('stepsChart'), {
+    type: 'bar',
+    data: {
+      labels: stepsLabels,
+      datasets: [
+        { data: stepsVals, backgroundColor: isLight ? 'rgba(10,132,255,0.35)' : 'rgba(10,132,255,0.5)', hoverBackgroundColor: 'rgba(10,132,255,0.8)', borderRadius: 4, borderSkipped: false },
+        { data: Array(stepsVals.length).fill(stepsBaseline), type: 'line', borderColor: base(10,132,255), borderDash: [5,3], borderWidth: 1.5, pointRadius: 0 }
+      ]
+    },
+    options: { ...B, scales: { x: xOff, y: { ticks: T, grid: G, beginAtZero: true } } }
+  });
+
+  // Heart chart
+  const rhrD = rhr.rows.slice().reverse();
+  const hrvD = hrv.rows.slice().reverse();
+  const hrvLatest = hrvD[hrvD.length - 1]?.[1] || 0;
+  const rhrLatest = rhrD[rhrD.length - 1]?.[1] || 0;
+
+  document.getElementById('rhrVal').textContent = Math.round(rhrLatest);
+  document.getElementById('hrvVal').textContent = `(${Math.round(hrvLatest)} ms)`;
+
+  if (chartInstances['hrChart']) chartInstances['hrChart'].destroy();
+  chartInstances['hrChart'] = new Chart(document.getElementById('hrChart'), {
+    type: 'line',
+    data: {
+      labels: rhrD.map(r => getDayLabel(r[0])),
+      datasets: [
+        { data: rhrD.map(r => r[1]), borderColor: '#ff453a', backgroundColor: fill(255,69,58), borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#ff453a', tension: 0.35, fill: true, yAxisID: 'y' },
+        { data: hrvD.map(r => r[1]), borderColor: '#bf5af2', backgroundColor: fill(191,90,242), borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#bf5af2', tension: 0.35, fill: true, yAxisID: 'y1' },
+        { data: Array(rhrD.length).fill(rhrBaseline), borderColor: base(255,69,58), borderDash: [5,3], borderWidth: 1, pointRadius: 0, yAxisID: 'y' },
+        { data: Array(hrvD.length).fill(hrvBaseline), borderColor: base(191,90,242), borderDash: [5,3], borderWidth: 1, pointRadius: 0, yAxisID: 'y1' }
+      ]
+    },
+    options: { ...B, scales: { x: xOff, y: { ticks: T, grid: G, min: 45, max: 75 }, y1: { position: 'right', ticks: T, grid: { display: false }, min: 20, max: 60 } } }
+  });
+
+  // Energy chart
+  const energyD = energy.rows.slice().reverse();
+  const exerciseD = exercise.rows.slice().reverse();
+  const energyAvg = energyD.length ? Math.round(energyD.reduce((a,b) => a + b[1], 0) / energyD.length) : 0;
+
+  document.getElementById('energyVal').textContent = energyAvg.toLocaleString();
+  const energyDeltaPct = Math.round((energyAvg / energyBaseline - 1) * 100);
+  const energyDeltaColor = energyDeltaPct >= 0 ? 'var(--grn)' : 'var(--red)';
+  document.getElementById('energyDelta').textContent = (energyDeltaPct >= 0 ? '↑' : '↓') + Math.abs(energyDeltaPct) + '%';
+  document.getElementById('energyDelta').style.color = energyDeltaColor;
+
+  if (chartInstances['energyChart']) chartInstances['energyChart'].destroy();
+  chartInstances['energyChart'] = new Chart(document.getElementById('energyChart'), {
+    type: 'bar',
+    data: {
+      labels: energyD.map(r => getDayLabel(r[0])),
+      datasets: [
+        { data: energyD.map(r => r[1]), backgroundColor: isLight ? 'rgba(250,17,79,0.3)' : 'rgba(250,17,79,0.45)', borderRadius: 4, borderSkipped: false, yAxisID: 'y' },
+        { data: exerciseD.map(r => r[1]), type: 'line', borderColor: '#a2f828', borderWidth: 1.5, pointRadius: 2.5, pointBackgroundColor: '#a2f828', tension: 0.3, yAxisID: 'y1' }
+      ]
+    },
+    options: { ...B, scales: { x: xOff, y: { ticks: T, grid: G }, y1: { position: 'right', ticks: { ...T, callback: v => v + 'm' }, grid: { display: false } } } }
+  });
+
+  // Body chart
+  const bodyD = body.rows.slice().reverse();
+  const bfD = bf.rows.slice().reverse();
+  const bodyLatest = bodyD[bodyD.length - 1]?.[1] || 0;
+  const bfLatest = bfD[bfD.length - 1]?.[1] || 0;
+
+  document.getElementById('weightVal').textContent = bodyLatest.toFixed(1);
+  document.getElementById('bfVal').textContent = bfLatest.toFixed(1) + '%';
+  const bodyFirst = bodyD[0]?.[1] || bodyLatest;
+  const bodyDelta = bodyLatest - bodyFirst;
+  const bodyColor = bodyDelta <= 0 ? 'var(--grn)' : 'var(--red)';
+  document.getElementById('weightDelta').textContent = (bodyDelta >= 0 ? '↑' : '↓') + Math.abs(bodyDelta).toFixed(1);
+  document.getElementById('weightDelta').style.color = bodyColor;
+
+  if (chartInstances['bodyChart']) chartInstances['bodyChart'].destroy();
+  chartInstances['bodyChart'] = new Chart(document.getElementById('bodyChart'), {
+    type: 'line',
+    data: {
+      labels: bodyD.map((r, i) => i === 0 || i === bodyD.length - 1 ? getMonthLabel(r[0]) : ''),
+      datasets: [
+        { data: bodyD.map(r => r[1]), borderColor: '#ff9f0a', backgroundColor: fill(255,159,10), borderWidth: 2, pointRadius: 3.5, pointBackgroundColor: '#ff9f0a', tension: 0.35, fill: true, yAxisID: 'y' },
+        { data: bfD.map(r => r[1]), borderColor: '#ff375f', backgroundColor: fill(255,55,95), borderWidth: 2, pointRadius: 3.5, pointBackgroundColor: '#ff375f', tension: 0.35, fill: true, yAxisID: 'y1' }
+      ]
+    },
+    options: { ...B, scales: { x: xOff, y: { ticks: T, grid: G, min: Math.min(...bodyD.map(r=>r[1])) - 1, max: Math.max(...bodyD.map(r=>r[1])) + 1 }, y1: { position: 'right', ticks: T, grid: { display: false }, min: Math.min(...bfD.map(r=>r[1])) - 1, max: Math.max(...bfD.map(r=>r[1])) + 1 } } }
+  });
+
+  // Sleep chart
+  const sleepD = sleep.rows.slice().reverse();
+  const sleepTotal = sleepD.reduce((a, r) => a + (r[1] || 0) + (r[2] || 0) + (r[3] || 0), 0);
+  const sleepAvg = sleepD.length ? (sleepTotal / sleepD.length / 60).toFixed(1) : '—';
+  document.getElementById('sleepAvg').textContent = sleepAvg;
+
+  const sleepRows = document.getElementById('sleepRows');
+  sleepRows.innerHTML = '';
+  const dayLabels = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  sleepD.forEach(r => {
+    const day = new Date(r[0]);
+    const dayLbl = dayLabels[day.getDay()];
+    const core = r[1] || 0;
+    const deep = r[2] || 0;
+    const rem = r[3] || 0;
+    const total = core + deep + rem;
+    const totalHr = (total / 60).toFixed(0);
+
+    const row = document.createElement('div');
+    row.className = 'sl-row';
+    const coreP = total > 0 ? (core / total * 100) : 0;
+    const deepP = total > 0 ? (deep / total * 100) : 0;
+    const remP = total > 0 ? (rem / total * 100) : 0;
+
+    row.innerHTML = `
+      <div class="sl-lbl">${dayLbl}</div>
+      <div class="sl-bar-wrap">
+        ${coreP > 0 ? `<span class="sc" style="flex:${coreP}"></span>` : ''}
+        ${deepP > 0 ? `<span class="sd" style="flex:${deepP}"></span>` : ''}
+        ${remP > 0 ? `<span class="sr" style="flex:${remP}"></span>` : ''}
+      </div>
+      <div class="sl-t">${totalHr}</div>
+    `;
+    sleepRows.appendChild(row);
+  });
+
+  // Remove loading
+  document.getElementById('stepsT').classList.remove('loading');
+  document.getElementById('heartT').classList.remove('loading');
+  document.getElementById('energyT').classList.remove('loading');
+  document.getElementById('bodyT').classList.remove('loading');
+  document.getElementById('sleepT').classList.remove('loading');
+}
+
+async function renderLongTerm(vo2, rhr3y, hrv3y, wt3y, bf3y, wt8d, mob, steadiness) {
+  const L = n => Array(n).fill('');
+
+  // VO2max
+  const vo2Rows = vo2.rows.map(r => r[1]);
+  const vo2Latest = vo2Rows[vo2Rows.length - 1] ?? 0;
+  const vo2Rating = vo2Latest >= 42 ? 'Excellent' : vo2Latest >= 38 ? 'Good' : vo2Latest >= 34 ? 'Fair' : 'Low';
+  document.getElementById('vo2Val').textContent = vo2Rows.length ? vo2Latest.toFixed(1) : '—';
+  document.getElementById('vo2Rating').textContent = vo2Rows.length ? vo2Rating : '';
+  if (vo2Rows.length) { document.getElementById('vo2Rating').style.background = ratingBg(vo2Rating); document.getElementById('vo2Rating').style.color = ratingColor(vo2Rating); }
+
+  if (chartInstances['vo2Chart']) chartInstances['vo2Chart'].destroy();
+  chartInstances['vo2Chart'] = new Chart(document.getElementById('vo2Chart'), {
+    type: 'line',
+    data: {
+      labels: L(vo2Rows.length),
+      datasets: [
+        { data: vo2Rows, borderColor: '#0a84ff', backgroundColor: sparkFill(10,132,255), borderWidth: 1.5, tension: 0.35, fill: true, spanGaps: true },
+        { data: Array(vo2Rows.length).fill(42), borderColor: isLight ? 'rgba(52,199,89,0.35)' : 'rgba(48,209,88,0.25)', borderDash: [4,3], borderWidth: 1, pointRadius: 0 }
+      ]
+    },
+    options: spark(Math.min(...vo2Rows) - 2, Math.max(...vo2Rows) + 2)
+  });
+
+  // RHR 3y
+  const rhrRows = rhr3y.rows.map(r => r[1]);
+  const rhrLatest = rhrRows[rhrRows.length - 1] ?? 0;
+  const rhrRating = rhrLatest < 55 ? 'Elite' : rhrLatest < 60 ? 'Athletic' : rhrLatest < 65 ? 'Good' : rhrLatest < 72 ? 'Average' : 'Watch';
+  document.getElementById('rhr3yVal').textContent = rhrRows.length ? rhrLatest.toFixed(1) : '—';
+  document.getElementById('rhrRating').textContent = rhrRows.length ? rhrRating : '';
+  if (rhrRows.length) { document.getElementById('rhrRating').style.background = ratingBg(rhrRating); document.getElementById('rhrRating').style.color = ratingColor(rhrRating); }
+
+  if (chartInstances['rhrChart']) chartInstances['rhrChart'].destroy();
+  chartInstances['rhrChart'] = new Chart(document.getElementById('rhrChart'), {
+    type: 'line',
+    data: {
+      labels: L(rhrRows.length),
+      datasets: [
+        { data: rhrRows, borderColor: '#ff453a', backgroundColor: sparkFill(255,69,58), borderWidth: 1.5, tension: 0.35, fill: true },
+        { data: Array(rhrRows.length).fill(60), borderColor: isLight ? 'rgba(52,199,89,0.35)' : 'rgba(48,209,88,0.25)', borderDash: [4,3], borderWidth: 1, pointRadius: 0 }
+      ]
+    },
+    options: spark(Math.min(...rhrRows) - 3, Math.max(...rhrRows) + 3)
+  });
+
+  // HRV 3y
+  const hrvRows = hrv3y.rows.map(r => r[1]);
+  const hrvLatest = hrvRows[hrvRows.length - 1] ?? 0;
+  const hrvTrendLine = hrvRows.length >= 12 ? hrvRows.slice(-12).reduce((a, b) => a + b, 0) / 12 : hrvLatest;
+  const hrvFirst = hrvRows[0] ?? 0;
+  const hrvTrend = hrvLatest < hrvFirst ? 'Declining' : hrvLatest > hrvFirst ? 'Improving' : 'Stable';
+  const hrvRating = hrvTrend === 'Declining' ? 'Watch' : hrvTrend === 'Improving' ? 'Good' : 'OK';
+  document.getElementById('hrv3yVal').textContent = hrvRows.length ? hrvLatest.toFixed(1) : '—';
+  document.getElementById('hrvRating').textContent = hrvRows.length ? hrvRating : '';
+  if (hrvRows.length) { document.getElementById('hrvRating').style.background = ratingBg(hrvRating); document.getElementById('hrvRating').style.color = ratingColor(hrvRating); }
+
+  if (chartInstances['hrvChart']) chartInstances['hrvChart'].destroy();
+  chartInstances['hrvChart'] = new Chart(document.getElementById('hrvChart'), {
+    type: 'line',
+    data: {
+      labels: L(hrvRows.length),
+      datasets: [
+        { data: hrvRows, borderColor: '#bf5af2', backgroundColor: sparkFill(191,90,242), borderWidth: 1.5, tension: 0.35, fill: true },
+        { data: Array(hrvRows.length).fill(hrvTrendLine), borderColor: isLight ? 'rgba(175,82,222,0.4)' : 'rgba(191,90,242,0.3)', borderDash: [5,3], borderWidth: 1, pointRadius: 0 }
+      ]
+    },
+    options: spark(Math.min(...hrvRows) - 5, Math.max(...hrvRows) + 5)
+  });
+
+  // Weight 3y
+  const wtRows = wt3y.rows.map(r => r[1]);
+  const wtLatest = wtRows[wtRows.length - 1] ?? 0;
+  const bfLatest = bf3y.rows[bf3y.rows.length - 1]?.[1] ?? 0;
+  const wtRating = 'Healthy';
+  document.getElementById('wt3yVal').textContent = wtRows.length ? wtLatest.toFixed(1) : '—';
+  document.getElementById('wtRating').textContent = wtRows.length ? wtRating : '';
+  if (wtRows.length) { document.getElementById('wtRating').style.background = ratingBg(wtRating); document.getElementById('wtRating').style.color = ratingColor(wtRating); }
+  document.getElementById('bf3yVal').textContent = bfLatest ? bfLatest.toFixed(1) : '—';
+  const bfRatingText = bfLatest < 14 ? 'athletic' : bfLatest < 20 ? 'fitness' : bfLatest < 25 ? 'healthy' : 'above avg';
+  document.getElementById('bfRating').textContent = bfLatest ? `(${bfRatingText})` : '';
+
+  if (chartInstances['wtChart']) chartInstances['wtChart'].destroy();
+  chartInstances['wtChart'] = new Chart(document.getElementById('wtChart'), {
+    type: 'line',
+    data: {
+      labels: L(wtRows.length),
+      datasets: [
+        { data: wtRows, borderColor: '#ff9f0a', backgroundColor: sparkFill(255,159,10), borderWidth: 1.5, tension: 0.35, fill: true }
+      ]
+    },
+    options: spark(Math.min(...wtRows) - 2, Math.max(...wtRows) + 2)
+  });
+
+  // Mobility (quarterly data, already in ASC order)
+  const mobRows = mob.rows.map(r => r[1]);
+  const mobLatest = mobRows.length > 0 ? mobRows[mobRows.length - 1] : 0;
+  const mobRating = mobLatest > 5 ? 'Excellent' : mobLatest > 4.5 ? 'Great' : mobLatest > 4 ? 'Good' : 'Fair';
+  document.getElementById('mobVal').textContent = mobLatest.toFixed(2);
+  document.getElementById('mobRating').textContent = mobRating;
+  document.getElementById('mobRating').style.background = ratingBg(mobRating);
+  document.getElementById('mobRating').style.color = ratingColor(mobRating);
+  const steadinessPct = steadiness.rows?.[0]?.[0];
+  document.getElementById('mobSub').textContent = `quarterly · km/h walk speed` + (steadinessPct != null ? ` · steadiness ${steadinessPct}%` : '');
+
+  if (chartInstances['mobChart']) chartInstances['mobChart'].destroy();
+  chartInstances['mobChart'] = new Chart(document.getElementById('mobChart'), {
+    type: 'line',
+    data: {
+      labels: L(mobRows.length),
+      datasets: [
+        { data: mobRows, borderColor: '#00c7be', backgroundColor: sparkFill(0,199,190), borderWidth: 1.5, tension: 0.35, fill: true }
+      ]
+    },
+    options: spark(Math.min(...mobRows) - 0.5, Math.max(...mobRows) + 0.5)
+  });
+
+  document.getElementById('vo2T').classList.remove('loading');
+  document.getElementById('rhrT').classList.remove('loading');
+  document.getElementById('hrvT').classList.remove('loading');
+  document.getElementById('wtT').classList.remove('loading');
+  document.getElementById('mobT').classList.remove('loading');
+}
+
+function renderGrade(vo2, rhr, hrv) {
+  // Use weekly averages for grading, not single-day values
+  const rhrVals = rhr.rows.map(r => r[1]);
+  const hrvVals = hrv.rows.map(r => r[1]);
+  const avgRhr = rhrVals.length ? rhrVals.reduce((a, b) => a + b, 0) / rhrVals.length : 0;
+  const avgHrv = hrvVals.length ? hrvVals.reduce((a, b) => a + b, 0) / hrvVals.length : 0;
+  const latestVo2 = vo2.rows[vo2.rows.length - 1]?.[1] || 0;
+
+  if (!latestVo2 && !avgRhr && !avgHrv) {
+    document.getElementById('gradeBadge').textContent = '—';
+    document.getElementById('gradeDesc').textContent = 'No data available';
+    return;
+  }
+
+  // VO2max: 42+ ml/kg/min = 10/10 (excellent for age 35+)
+  const vo2Score = Math.min(10, (latestVo2 / 42) * 10);
+  // RHR: 50 bpm = 10/10, 75 bpm = 0/10 (linear scale over 25 bpm range)
+  const rhrScore = Math.min(10, Math.max(0, (75 - avgRhr) / 2.5));
+  // HRV: 50+ ms SDNN = 10/10
+  const hrvScore = Math.min(10, (avgHrv / 50) * 10);
+  const overall = (vo2Score + rhrScore + hrvScore) / 3;
+  const gradeLetter = overall >= 8.5 ? 'A' : overall >= 7.5 ? 'B+' : overall >= 6.5 ? 'B' : overall >= 5.5 ? 'C' : 'D';
+
+  document.getElementById('gradeBadge').textContent = gradeLetter;
+  document.getElementById('gradeDesc').textContent = `VO2max ${latestVo2.toFixed(1)}, RHR ${avgRhr.toFixed(0)} bpm, HRV ${avgHrv.toFixed(0)} ms`;
+}
+
+function refreshData() {
+  const banner = document.getElementById('errorBanner');
+  if (banner) banner.remove();
+  document.querySelectorAll('.tile').forEach(t => t.classList.add('loading'));
+  loadData();
+}
+
+// Start on load — handle OAuth callback or check auth
+window.addEventListener('load', async () => {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+
+  if (code) {
+    // OAuth callback — exchange code for token
+    try {
+      await exchangeCode(code);
+      history.replaceState({}, '', location.pathname);
+      hideLogin();
+      loadData();
+    } catch (e) {
+      history.replaceState({}, '', location.pathname);
+      showLogin('Authentication failed: ' + e.message);
+    }
+    return;
+  }
+
+  if (getAuth()) {
+    hideLogin();
+    loadData();
+  } else {
+    showLogin();
+  }
+});
+</script>
+</body>
+</html>
